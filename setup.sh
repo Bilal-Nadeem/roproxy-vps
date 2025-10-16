@@ -36,16 +36,27 @@ NODE_PORT=${NODE_PORT:-3000}
 echo ""
 echo -e "${YELLOW}Checking DNS configuration...${NC}"
 
-# Extract base domain
+# Get server IP
+SERVER_IP=$(curl -s ifconfig.me)
+echo "Server IP: $SERVER_IP"
+
+# Determine what domain level to check for wildcard
+# For multi-level domains like roblox-proxy.starkrblx.com, check if *.roblox-proxy.starkrblx.com exists
+# For single domains like starkrblx.com, check if *.starkrblx.com exists
+
 if [[ $DOMAIN == *.*.* ]]; then
-    BASE_DOMAIN=$(echo "$DOMAIN" | awk -F. '{print $(NF-1)"."$NF}')
-else
+    # Multi-level subdomain (e.g., roblox-proxy.starkrblx.com)
+    # Check for wildcard at the entered domain level: *.roblox-proxy.starkrblx.com
     BASE_DOMAIN=$DOMAIN
+    WILDCARD_TEST="wildcard-test-$(date +%s | tail -c 6).$BASE_DOMAIN"
+else
+    # Simple domain or single subdomain (e.g., starkrblx.com or proxy.com)
+    BASE_DOMAIN=$DOMAIN
+    WILDCARD_TEST="wildcard-test-$(date +%s | tail -c 6).$BASE_DOMAIN"
 fi
 
-# Check if wildcard DNS exists
-WILDCARD_IP=$(dig +short "wildcard-test-$(date +%s).$BASE_DOMAIN" @8.8.8.8 | head -n1)
-SERVER_IP=$(curl -s ifconfig.me)
+echo "Checking for wildcard DNS at: *.$BASE_DOMAIN"
+WILDCARD_IP=$(dig +short "$WILDCARD_TEST" @8.8.8.8 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
 
 USE_WILDCARD="n"
 if [ -n "$WILDCARD_IP" ] && [ "$WILDCARD_IP" = "$SERVER_IP" ]; then
@@ -55,7 +66,12 @@ if [ -n "$WILDCARD_IP" ] && [ "$WILDCARD_IP" = "$SERVER_IP" ]; then
     SSL_DOMAINS="-d $BASE_DOMAIN -d *.$BASE_DOMAIN"
     echo -e "${GREEN}Will obtain wildcard certificate for: $BASE_DOMAIN and *.$BASE_DOMAIN${NC}"
 else
-    echo -e "${YELLOW}⚠ No wildcard DNS detected${NC}"
+    echo -e "${YELLOW}⚠ No wildcard DNS detected for *.$BASE_DOMAIN${NC}"
+    if [ -n "$WILDCARD_IP" ]; then
+        echo "Found IP: $WILDCARD_IP (doesn't match server IP: $SERVER_IP)"
+    else
+        echo "No DNS record found for *.$BASE_DOMAIN"
+    fi
     read -p "Do you want wildcard SSL anyway? (requires DNS validation) (y/n): " MANUAL_WILDCARD
     if [ "$MANUAL_WILDCARD" = "y" ] || [ "$MANUAL_WILDCARD" = "Y" ]; then
         USE_WILDCARD="y"
