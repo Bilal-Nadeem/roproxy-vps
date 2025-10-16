@@ -84,6 +84,66 @@ if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
     exit 1
 fi
 
+# Get Node.js port from existing config or use default
+echo ""
+echo -e "${YELLOW}Detecting Node.js port from existing configuration...${NC}"
+NODE_PORT=3000
+if [ -f "/etc/systemd/system/roproxy.service" ]; then
+    DETECTED_PORT=$(grep "Environment=PORT=" /etc/systemd/system/roproxy.service | cut -d= -f3)
+    if [ -n "$DETECTED_PORT" ]; then
+        NODE_PORT=$DETECTED_PORT
+        echo -e "${GREEN}✓ Detected port: $NODE_PORT${NC}"
+    fi
+else
+    echo -e "${YELLOW}Using default port: $NODE_PORT${NC}"
+fi
+
+# Create Nginx configuration for subdomain
+echo ""
+echo -e "${GREEN}Creating Nginx configuration...${NC}"
+
+NGINX_CONFIG="/etc/nginx/sites-available/$SUBDOMAIN"
+cat > "$NGINX_CONFIG" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $SUBDOMAIN;
+
+    # Allow large file uploads
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://localhost:$NODE_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        
+        # Timeout settings
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+EOF
+
+# Enable the site
+ln -sf "$NGINX_CONFIG" "/etc/nginx/sites-enabled/$SUBDOMAIN"
+
+# Test and reload Nginx
+nginx -t && systemctl reload nginx || {
+    echo -e "${RED}Nginx configuration test failed${NC}"
+    rm -f "/etc/nginx/sites-enabled/$SUBDOMAIN"
+    rm -f "$NGINX_CONFIG"
+    exit 1
+}
+
+echo -e "${GREEN}✓ Nginx configuration created and enabled${NC}"
+
 # Check if certificate already exists
 echo ""
 echo -e "${YELLOW}Checking for existing certificates...${NC}"
@@ -106,12 +166,18 @@ certbot --nginx -d "$SUBDOMAIN" --agree-tos --non-interactive --redirect $EXPAND
     echo -e "${GREEN}Your subdomain is now secured:${NC}"
     echo -e "${GREEN}  https://$SUBDOMAIN${NC}"
     echo ""
+    echo -e "${YELLOW}Configuration:${NC}"
+    echo "  Node.js Port: $NODE_PORT"
+    echo "  Nginx Config: $NGINX_CONFIG"
+    echo "  SSL Cert: /etc/letsencrypt/live/$SUBDOMAIN/"
+    echo ""
     echo -e "${YELLOW}Certificate Details:${NC}"
-    certbot certificates | grep -A 10 "$SUBDOMAIN" || echo "View all: certbot certificates"
+    certbot certificates 2>/dev/null | grep -A 10 "$SUBDOMAIN" || echo "View all: certbot certificates"
     echo ""
     echo -e "${YELLOW}Note:${NC}"
     echo "  - Certificate auto-renews every 90 days"
     echo "  - No manual maintenance needed"
+    echo "  - Proxies to localhost:$NODE_PORT"
     echo ""
     echo -e "${GREEN}Test your subdomain:${NC}"
     echo "  curl https://$SUBDOMAIN/health"
@@ -132,8 +198,19 @@ certbot --nginx -d "$SUBDOMAIN" --agree-tos --non-interactive --redirect $EXPAND
     echo "  3. Check Nginx logs:"
     echo "     tail -f /var/log/nginx/error.log"
     echo ""
-    echo "  4. Try manual setup:"
+    echo "  4. Verify Nginx config:"
+    echo "     nginx -t"
+    echo "     cat $NGINX_CONFIG"
+    echo ""
+    echo "  5. Try manual SSL setup:"
     echo "     certbot --nginx -d $SUBDOMAIN"
     echo ""
+    
+    # Cleanup on failure
+    echo -e "${YELLOW}Cleaning up Nginx configuration...${NC}"
+    rm -f "/etc/nginx/sites-enabled/$SUBDOMAIN"
+    rm -f "$NGINX_CONFIG"
+    systemctl reload nginx
+    
     exit 1
 }
