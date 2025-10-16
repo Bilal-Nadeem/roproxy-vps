@@ -27,6 +27,16 @@ The script will:
 - Your email (for SSL certificate)
 - Node.js port (default: 3000)
 
+**Automatic Features:**
+- ✅ **Auto-detects wildcard DNS** - If you have `*.yourdomain.com` pointing to your server, it automatically sets up wildcard SSL
+- ✅ **Idempotent** - Safe to run multiple times (cleans up old installations)
+- ✅ **Executable by default** - No need to `chmod +x` after pulling from git
+
+**SSL Configuration:**
+- If wildcard DNS is detected (`*.domain` → server IP), automatically uses wildcard SSL
+- If no wildcard DNS, asks if you want to set it up manually (requires DNS validation)
+- Single domain SSL uses automatic HTTP validation (no manual steps)
+
 That's it! Your proxy will be running at `https://yourdomain.com`
 
 ---
@@ -40,14 +50,34 @@ That's it! Your proxy will be running at `https://yourdomain.com`
 
 ### DNS Setup (Before Running Setup)
 Point your domain to your VPS:
-- Add an **A record**: `@` or your subdomain → Your VPS IP address
 
-Example:
+**For single domain (proxy.example.com):**
 ```
 Type: A
 Name: proxy (or @ for root domain)
 Value: 123.456.789.0 (your VPS IP)
 TTL: 3600
+```
+
+**For wildcard SSL (*.example.com):**
+```
+Type: A
+Name: @
+Value: 123.456.789.0 (your VPS IP)
+TTL: 3600
+
+Type: A
+Name: *
+Value: 123.456.789.0 (your VPS IP)
+TTL: 3600
+```
+
+**Note:** Wildcard SSL requires DNS validation. During setup, certbot will ask you to add a TXT record. Example:
+```
+Type: TXT
+Name: _acme-challenge
+Value: [provided by certbot]
+TTL: 300
 ```
 
 ---
@@ -224,9 +254,20 @@ nslookup yourdomain.com
 # Check Nginx configuration
 sudo nginx -t
 
-# Try obtaining certificate again
+# Try obtaining certificate again (single domain)
 sudo certbot --nginx -d yourdomain.com --force-renewal
+
+# For wildcard certificate (requires DNS challenge)
+sudo certbot --nginx -d example.com -d *.example.com
+# Follow prompts to add TXT record to DNS
 ```
+
+**Wildcard SSL Troubleshooting:**
+- Wildcard certificates (`*.example.com`) require DNS validation
+- You'll need to add a `_acme-challenge` TXT record to your DNS
+- Wait 5-10 minutes after adding the TXT record before continuing
+- Some DNS providers may take longer to propagate
+- Verify TXT record: `nslookup -type=TXT _acme-challenge.example.com`
 
 ### Nginx errors
 ```bash
@@ -263,22 +304,66 @@ sudo nginx -t
 
 ## 🔄 Updating Your Proxy
 
-1. **Stop the service:**
+### Automated Update (Recommended)
+
+Simply run the update script:
+```bash
+sudo ./update.sh
+```
+
+The script will:
+- ✅ Create a backup of your current installation
+- ✅ Pull latest changes from git
+- ✅ Update dependencies
+- ✅ Restart the service
+- ✅ Rollback automatically if update fails
+
+### Manual Update
+
+If you prefer to update manually:
+
+1. **Navigate to project directory:**
+   ```bash
+   cd /opt/roproxy
+   ```
+
+2. **Stop the service:**
    ```bash
    sudo systemctl stop roproxy
    ```
 
-2. **Pull/upload new code**
-
-3. **Install dependencies:**
+3. **Pull latest changes:**
    ```bash
-   npm install
+   git pull origin main
    ```
 
-4. **Restart the service:**
+4. **Install dependencies:**
+   ```bash
+   npm install --production
+   ```
+
+5. **Restart the service:**
    ```bash
    sudo systemctl start roproxy
    ```
+
+### Setup from Git (First Time)
+
+If you want to use git for updates:
+
+```bash
+# On your server
+cd /opt
+git clone https://github.com/yourusername/roproxy.git roproxy
+cd roproxy
+sudo ./setup.sh
+```
+
+Then for updates, just run:
+```bash
+cd /opt/roproxy
+sudo ./update.sh
+```
 
 ---
 

@@ -32,11 +32,49 @@ read -p "Enter your email for SSL certificate: " EMAIL
 read -p "Enter the port for the Node.js server (default: 3000): " NODE_PORT
 NODE_PORT=${NODE_PORT:-3000}
 
+# Auto-detect wildcard DNS configuration
+echo ""
+echo -e "${YELLOW}Checking DNS configuration...${NC}"
+
+# Extract base domain
+if [[ $DOMAIN == *.*.* ]]; then
+    BASE_DOMAIN=$(echo "$DOMAIN" | awk -F. '{print $(NF-1)"."$NF}')
+else
+    BASE_DOMAIN=$DOMAIN
+fi
+
+# Check if wildcard DNS exists
+WILDCARD_IP=$(dig +short "wildcard-test-$(date +%s).$BASE_DOMAIN" @8.8.8.8 | head -n1)
+SERVER_IP=$(curl -s ifconfig.me)
+
+USE_WILDCARD="n"
+if [ -n "$WILDCARD_IP" ] && [ "$WILDCARD_IP" = "$SERVER_IP" ]; then
+    echo -e "${GREEN}✓ Wildcard DNS detected: *.$BASE_DOMAIN → $WILDCARD_IP${NC}"
+    echo -e "${GREEN}✓ Matches server IP: $SERVER_IP${NC}"
+    USE_WILDCARD="y"
+    SSL_DOMAINS="-d $BASE_DOMAIN -d *.$BASE_DOMAIN"
+    echo -e "${GREEN}Will obtain wildcard certificate for: $BASE_DOMAIN and *.$BASE_DOMAIN${NC}"
+else
+    echo -e "${YELLOW}⚠ No wildcard DNS detected${NC}"
+    read -p "Do you want wildcard SSL anyway? (requires DNS validation) (y/n): " MANUAL_WILDCARD
+    if [ "$MANUAL_WILDCARD" = "y" ] || [ "$MANUAL_WILDCARD" = "Y" ]; then
+        USE_WILDCARD="y"
+        SSL_DOMAINS="-d $BASE_DOMAIN -d *.$BASE_DOMAIN"
+        echo -e "${YELLOW}Will obtain wildcard certificate for: $BASE_DOMAIN and *.$BASE_DOMAIN${NC}"
+    else
+        SSL_DOMAINS="-d $DOMAIN"
+        echo -e "${YELLOW}Will obtain certificate for: $DOMAIN only${NC}"
+    fi
+fi
+
 echo ""
 echo -e "${GREEN}Configuration Summary:${NC}"
 echo "Domain: $DOMAIN"
+echo "Base Domain: $BASE_DOMAIN"
+echo "SSL Configuration: $SSL_DOMAINS"
 echo "Email: $EMAIL"
 echo "Node.js Port: $NODE_PORT"
+echo "Server IP: $SERVER_IP"
 echo ""
 read -p "Is this correct? (y/n): " CONFIRM
 
@@ -44,6 +82,37 @@ if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
     echo -e "${RED}Setup cancelled.${NC}"
     exit 1
 fi
+
+# Clean up previous installation if exists
+echo ""
+echo -e "${YELLOW}Checking for previous installation...${NC}"
+
+if systemctl is-active --quiet roproxy; then
+    echo "Stopping existing roproxy service..."
+    systemctl stop roproxy
+fi
+
+if systemctl is-enabled --quiet roproxy 2>/dev/null; then
+    echo "Disabling existing roproxy service..."
+    systemctl disable roproxy
+fi
+
+if [ -f /etc/systemd/system/roproxy.service ]; then
+    echo "Removing old service file..."
+    rm -f /etc/systemd/system/roproxy.service
+    systemctl daemon-reload
+fi
+
+if [ -f /etc/nginx/sites-enabled/roproxy ]; then
+    echo "Removing old Nginx configuration..."
+    rm -f /etc/nginx/sites-enabled/roproxy
+fi
+
+if [ -f /etc/nginx/sites-available/roproxy ]; then
+    rm -f /etc/nginx/sites-available/roproxy
+fi
+
+echo -e "${GREEN}✓ Cleanup complete${NC}"
 
 # Update system
 echo ""
@@ -179,9 +248,26 @@ fi
 echo ""
 echo -e "${GREEN}Obtaining SSL certificate...${NC}"
 echo -e "${YELLOW}Note: Make sure your domain DNS is pointing to this server's IP address${NC}"
+
+if [ "$USE_WILDCARD" = "y" ] || [ "$USE_WILDCARD" = "Y" ]; then
+    echo -e "${YELLOW}Wildcard certificates require DNS validation (not HTTP validation)${NC}"
+    echo -e "${YELLOW}You will need to add a TXT record to your DNS${NC}"
+fi
+
 read -p "Press Enter to continue with SSL setup or Ctrl+C to cancel..."
 
-certbot --nginx -d $DOMAIN --non-interactive --agree-tos --email $EMAIL --redirect
+# Try to obtain certificate
+if [ "$USE_WILDCARD" = "y" ] || [ "$USE_WILDCARD" = "Y" ]; then
+    # Wildcard requires DNS challenge
+    certbot --nginx $SSL_DOMAINS --non-interactive --agree-tos --email $EMAIL --redirect --preferred-challenges dns || {
+        echo -e "${RED}Automated wildcard SSL setup failed.${NC}"
+        echo -e "${YELLOW}Please run manually: sudo certbot --nginx $SSL_DOMAINS${NC}"
+        echo -e "${YELLOW}You'll need to add DNS TXT records as prompted.${NC}"
+    }
+else
+    # Standard domain uses HTTP challenge
+    certbot --nginx $SSL_DOMAINS --non-interactive --agree-tos --email $EMAIL --redirect
+fi
 
 echo ""
 echo -e "${GREEN}==================================================${NC}"
