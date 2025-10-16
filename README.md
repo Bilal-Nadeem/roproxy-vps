@@ -39,6 +39,48 @@ That's it! Your proxy will be running at `https://yourdomain.com`
 
 ---
 
+## 🌐 Adding Subdomains (Optional)
+
+If you want to use subdomain-based routing (e.g., `api.roblox-proxy.starkrblx.com`, `cdn.roblox-proxy.starkrblx.com`), use the subdomain setup script:
+
+### 1. Add DNS Record First
+
+In your DNS provider (Cloudflare, etc.), add an A record:
+```
+Type: A
+Name: api (or whatever subdomain you want)
+Value: Your VPS IP
+TTL: 3600
+```
+
+### 2. Run the Subdomain Script
+
+```bash
+sudo ./add-subdomain.sh
+```
+
+You'll be prompted for:
+- The subdomain (e.g., `api.roblox-proxy.starkrblx.com`)
+
+The script will:
+- ✅ Verify DNS is configured correctly
+- ✅ Obtain SSL certificate automatically
+- ✅ Configure Nginx for the subdomain
+- ✅ Set up auto-renewal
+
+### 3. Add Multiple Subdomains
+
+Run the script multiple times for different subdomains:
+```bash
+sudo ./add-subdomain.sh  # Add api.domain.com
+sudo ./add-subdomain.sh  # Add cdn.domain.com
+sudo ./add-subdomain.sh  # Add another one
+```
+
+Each subdomain gets its own SSL certificate that auto-renews!
+
+---
+
 ## 📋 Prerequisites
 
 - **Ubuntu/Debian VPS** (20.04+ recommended)
@@ -238,10 +280,17 @@ sudo certbot --nginx -d yourdomain.com --force-renewal
 
 ### Setting up SSL for additional subdomains (optional)
 If you need SSL for subdomains later:
+
+**Easy way (recommended):**
+```bash
+sudo ./add-subdomain.sh
+# Follow the prompts
+```
+
+**Manual way:**
 ```bash
 # For a specific subdomain
 sudo certbot --nginx -d subdomain.yourdomain.com
-
 # This will also auto-renew
 ```
 
