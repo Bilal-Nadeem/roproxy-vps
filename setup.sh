@@ -32,65 +32,15 @@ read -p "Enter your email for SSL certificate: " EMAIL
 read -p "Enter the port for the Node.js server (default: 3000): " NODE_PORT
 NODE_PORT=${NODE_PORT:-3000}
 
-# Auto-detect wildcard DNS configuration
-echo ""
-echo -e "${YELLOW}Checking DNS configuration...${NC}"
-
-# Get server IP
-SERVER_IP=$(curl -s ifconfig.me)
-echo "Server IP: $SERVER_IP"
-
-# Determine what domain level to check for wildcard
-# For multi-level domains like roblox-proxy.starkrblx.com, check if *.roblox-proxy.starkrblx.com exists
-# For single domains like starkrblx.com, check if *.starkrblx.com exists
-
-if [[ $DOMAIN == *.*.* ]]; then
-    # Multi-level subdomain (e.g., roblox-proxy.starkrblx.com)
-    # Check for wildcard at the entered domain level: *.roblox-proxy.starkrblx.com
-    BASE_DOMAIN=$DOMAIN
-    WILDCARD_TEST="wildcard-test-$(date +%s | tail -c 6).$BASE_DOMAIN"
-else
-    # Simple domain or single subdomain (e.g., starkrblx.com or proxy.com)
-    BASE_DOMAIN=$DOMAIN
-    WILDCARD_TEST="wildcard-test-$(date +%s | tail -c 6).$BASE_DOMAIN"
-fi
-
-echo "Checking for wildcard DNS at: *.$BASE_DOMAIN"
-WILDCARD_IP=$(dig +short "$WILDCARD_TEST" @8.8.8.8 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
-
-USE_WILDCARD="n"
-if [ -n "$WILDCARD_IP" ] && [ "$WILDCARD_IP" = "$SERVER_IP" ]; then
-    echo -e "${GREEN}✓ Wildcard DNS detected: *.$BASE_DOMAIN → $WILDCARD_IP${NC}"
-    echo -e "${GREEN}✓ Matches server IP: $SERVER_IP${NC}"
-    USE_WILDCARD="y"
-    SSL_DOMAINS="-d $BASE_DOMAIN -d *.$BASE_DOMAIN"
-    echo -e "${GREEN}Will obtain wildcard certificate for: $BASE_DOMAIN and *.$BASE_DOMAIN${NC}"
-else
-    echo -e "${YELLOW}⚠ No wildcard DNS detected for *.$BASE_DOMAIN${NC}"
-    if [ -n "$WILDCARD_IP" ]; then
-        echo "Found IP: $WILDCARD_IP (doesn't match server IP: $SERVER_IP)"
-    else
-        echo "No DNS record found for *.$BASE_DOMAIN"
-    fi
-    read -p "Do you want wildcard SSL anyway? (requires DNS validation) (y/n): " MANUAL_WILDCARD
-    if [ "$MANUAL_WILDCARD" = "y" ] || [ "$MANUAL_WILDCARD" = "Y" ]; then
-        USE_WILDCARD="y"
-        SSL_DOMAINS="-d $BASE_DOMAIN -d *.$BASE_DOMAIN"
-        echo -e "${YELLOW}Will obtain wildcard certificate for: $BASE_DOMAIN and *.$BASE_DOMAIN${NC}"
-    else
-        SSL_DOMAINS="-d $DOMAIN"
-        echo -e "${YELLOW}Will obtain certificate for: $DOMAIN only${NC}"
-    fi
-fi
+# Use single domain SSL by default (auto-renews, no manual steps)
+SSL_DOMAINS="-d $DOMAIN"
 
 echo ""
 echo -e "${GREEN}Configuration Summary:${NC}"
 echo "Domain: $DOMAIN"
-echo "Base Domain: $BASE_DOMAIN"
-echo "SSL Configuration: $SSL_DOMAINS"
+echo "SSL: Single domain (auto-renewing)"
 echo "Email: $EMAIL"
 echo "Node.js Port: $NODE_PORT"
-echo "Server IP: $SERVER_IP"
 echo ""
 read -p "Is this correct? (y/n): " CONFIRM
 
@@ -265,25 +215,22 @@ echo ""
 echo -e "${GREEN}Obtaining SSL certificate...${NC}"
 echo -e "${YELLOW}Note: Make sure your domain DNS is pointing to this server's IP address${NC}"
 
-if [ "$USE_WILDCARD" = "y" ] || [ "$USE_WILDCARD" = "Y" ]; then
-    echo -e "${YELLOW}Wildcard certificates require DNS validation (not HTTP validation)${NC}"
-    echo -e "${YELLOW}You will need to add a TXT record to your DNS${NC}"
+# Check if certificate already exists
+EXPAND_FLAG=""
+if certbot certificates 2>/dev/null | grep -q "$DOMAIN"; then
+    echo -e "${YELLOW}Existing certificate found for $DOMAIN - will expand/renew it${NC}"
+    EXPAND_FLAG="--expand"
 fi
 
 read -p "Press Enter to continue with SSL setup or Ctrl+C to cancel..."
 
-# Try to obtain certificate
-if [ "$USE_WILDCARD" = "y" ] || [ "$USE_WILDCARD" = "Y" ]; then
-    # Wildcard requires DNS challenge
-    certbot --nginx $SSL_DOMAINS --non-interactive --agree-tos --email $EMAIL --redirect --preferred-challenges dns || {
-        echo -e "${RED}Automated wildcard SSL setup failed.${NC}"
-        echo -e "${YELLOW}Please run manually: sudo certbot --nginx $SSL_DOMAINS${NC}"
-        echo -e "${YELLOW}You'll need to add DNS TXT records as prompted.${NC}"
-    }
-else
-    # Standard domain uses HTTP challenge
-    certbot --nginx $SSL_DOMAINS --non-interactive --agree-tos --email $EMAIL --redirect
-fi
+# Single domain SSL with HTTP validation (automatic, auto-renews)
+echo -e "${GREEN}Using HTTP validation (automatic, no manual steps)${NC}"
+certbot --nginx $SSL_DOMAINS --agree-tos --email $EMAIL --redirect --non-interactive $EXPAND_FLAG || {
+    echo -e "${RED}Failed to obtain SSL certificate.${NC}"
+    echo -e "${YELLOW}Make sure your domain DNS is pointing to this server.${NC}"
+    echo -e "${YELLOW}You can try again with: sudo certbot --nginx -d $DOMAIN${NC}"
+}
 
 echo ""
 echo -e "${GREEN}==================================================${NC}"

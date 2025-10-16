@@ -27,15 +27,13 @@ The script will:
 - Your email (for SSL certificate)
 - Node.js port (default: 3000)
 
-**Automatic Features:**
-- ✅ **Auto-detects wildcard DNS** - If you have `*.yourdomain.com` pointing to your server, it automatically sets up wildcard SSL
+**Features:**
+- ✅ **Single domain SSL** - Automatic HTTP validation (no manual steps)
+- ✅ **Auto-renews forever** - No maintenance needed every 90 days
 - ✅ **Idempotent** - Safe to run multiple times (cleans up old installations)
 - ✅ **Executable by default** - No need to `chmod +x` after pulling from git
 
-**SSL Configuration:**
-- If wildcard DNS is detected (`*.domain` → server IP), automatically uses wildcard SSL
-- If no wildcard DNS, asks if you want to set it up manually (requires DNS validation)
-- Single domain SSL uses automatic HTTP validation (no manual steps)
+**Note:** For subdomains, you can set them up separately after the main setup, or use path-based routing instead.
 
 That's it! Your proxy will be running at `https://yourdomain.com`
 
@@ -51,34 +49,14 @@ That's it! Your proxy will be running at `https://yourdomain.com`
 ### DNS Setup (Before Running Setup)
 Point your domain to your VPS:
 
-**For single domain (proxy.example.com):**
 ```
 Type: A
-Name: proxy (or @ for root domain)
+Name: proxy (or @ for root domain)  
 Value: 123.456.789.0 (your VPS IP)
 TTL: 3600
 ```
 
-**For wildcard SSL (*.example.com):**
-```
-Type: A
-Name: @
-Value: 123.456.789.0 (your VPS IP)
-TTL: 3600
-
-Type: A
-Name: *
-Value: 123.456.789.0 (your VPS IP)
-TTL: 3600
-```
-
-**Note:** Wildcard SSL requires DNS validation. During setup, certbot will ask you to add a TXT record. Example:
-```
-Type: TXT
-Name: _acme-challenge
-Value: [provided by certbot]
-TTL: 300
-```
+**That's all you need!** Single domain SSL handles everything automatically.
 
 ---
 
@@ -254,20 +232,18 @@ nslookup yourdomain.com
 # Check Nginx configuration
 sudo nginx -t
 
-# Try obtaining certificate again (single domain)
+# Try obtaining certificate again
 sudo certbot --nginx -d yourdomain.com --force-renewal
-
-# For wildcard certificate (requires DNS challenge)
-sudo certbot --nginx -d example.com -d *.example.com
-# Follow prompts to add TXT record to DNS
 ```
 
-**Wildcard SSL Troubleshooting:**
-- Wildcard certificates (`*.example.com`) require DNS validation
-- You'll need to add a `_acme-challenge` TXT record to your DNS
-- Wait 5-10 minutes after adding the TXT record before continuing
-- Some DNS providers may take longer to propagate
-- Verify TXT record: `nslookup -type=TXT _acme-challenge.example.com`
+### Setting up SSL for additional subdomains (optional)
+If you need SSL for subdomains later:
+```bash
+# For a specific subdomain
+sudo certbot --nginx -d subdomain.yourdomain.com
+
+# This will also auto-renew
+```
 
 ### Nginx errors
 ```bash
