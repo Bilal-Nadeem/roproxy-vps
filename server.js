@@ -1,4 +1,4 @@
-// Starkrblx Proxy - VPS Version
+// Starkrblx Proxy - VPS Version (Path Mode)
 
 const express = require('express');
 const fetch = require('node-fetch');
@@ -6,7 +6,6 @@ const fetch = require('node-fetch');
 const app = express();
 
 // Configuration
-const ROUTING_MODE = "path";  // Options: "subdomain" or "path"
 const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
 
 // List of allowed Roblox domains
@@ -39,32 +38,26 @@ app.use((req, res, next) => {
     next();
 });
 
-// Main proxy handler
+// Main proxy handler - Path mode only
 app.all('*', async (req, res) => {
-    let robloxSubdomain;
-    let targetPath;
-
-    if (ROUTING_MODE === "subdomain") {
-        // Subdomain mode: catalog.yourdomain.com -> catalog.roblox.com
-        const parts = req.hostname.split('.');
-        robloxSubdomain = parts[0];
-        
-        if (!robloxSubdomain || !domains.includes(robloxSubdomain)) {
-            return res.status(400).json({ message: "Invalid subdomain" });
-        }
-        
-        targetPath = req.path.substring(1);
-    } else {
-        // Path mode: yourdomain.com/catalog -> catalog.roblox.com
-        const pathParts = req.path.split('/').filter(p => p);
-        
-        if (!pathParts[0] || !domains.includes(pathParts[0])) {
-            return res.status(400).json({ message: "Invalid path. Use: /catalog/v1/..." });
-        }
-        
-        robloxSubdomain = pathParts[0];
-        targetPath = pathParts.slice(1).join("/");
+    // Path mode: yourdomain.com/catalog/v1/... -> catalog.roblox.com/v1/...
+    const pathParts = req.path.split('/').filter(p => p);
+    
+    if (!pathParts[0]) {
+        return res.status(400).json({ 
+            message: "Invalid path. Use format: /catalog/v1/..." 
+        });
     }
+    
+    const robloxSubdomain = pathParts[0];
+    
+    if (!domains.includes(robloxSubdomain)) {
+        return res.status(400).json({ 
+            message: `Invalid API endpoint '${robloxSubdomain}'. Use: catalog, users, avatar, etc.` 
+        });
+    }
+    
+    const targetPath = pathParts.slice(1).join("/");
 
     // Prepare headers
     const headers = { ...req.headers };
@@ -116,6 +109,6 @@ app.all('*', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
-    console.log(`Routing mode: ${ROUTING_MODE}`);
+    console.log(`Mode: Path-based routing (e.g., /catalog/v1/...)`);
     console.log(`Authentication: Enabled`);
 });
