@@ -8,7 +8,7 @@ const app = express();
 // Configuration
 // Set to "subdomain" to use catalog.starkrblx.com
 // Set to "path" to use starkrblx.com/catalog
-const ROUTING_MODE = "subdomain";  // Options: "subdomain" or "path"
+const ROUTING_MODE = "path";  // Options: "subdomain" or "path"
 
 // List of allowed Roblox domains
 const domains = [
