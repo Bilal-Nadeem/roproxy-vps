@@ -68,6 +68,7 @@ app.all('*', async (req, res) => {
     delete headers['connection'];
     delete headers['x-api-key'];
     delete headers['authorization'];
+    delete headers['accept-encoding']; // Let fetch handle compression
     headers['user-agent'] = "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
 
     const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
@@ -85,13 +86,11 @@ app.all('*', async (req, res) => {
 
         const response = await fetch(targetUrl, fetchOptions);
         
-        // Copy response headers (excluding problematic ones)
-        const skipHeaders = ['content-length', 'transfer-encoding', 'connection', 'keep-alive'];
-        response.headers.forEach((value, key) => {
-            if (!skipHeaders.includes(key.toLowerCase())) {
-                res.setHeader(key, value);
-            }
-        });
+        // Only copy content-type header (like Cloudflare)
+        const contentType = response.headers.get('content-type');
+        if (contentType) {
+            res.setHeader('content-type', contentType);
+        }
 
         res.status(response.status);
         const body = await response.buffer();
