@@ -48,8 +48,8 @@ const domains = [
 ];
 
 // Middleware to parse request body
-app.use(express.json());
-app.use(express.raw({ type: '*/*', limit: '50mb' }));
+app.use(express.json({ limit: '500mb' }));
+app.use(express.raw({ type: '*/*', limit: '500mb' }));
 
 // API Key Authentication Middleware
 app.use((req, res, next) => {
