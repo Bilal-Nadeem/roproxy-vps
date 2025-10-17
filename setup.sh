@@ -134,8 +134,8 @@ server {
     listen [::]:80;
     server_name $DOMAIN;
 
-    # Allow large file uploads
-    client_max_body_size 100M;
+    # Allow large file uploads - no limit
+    client_max_body_size 0;
 
     location / {
         proxy_pass http://localhost:$NODE_PORT;
@@ -148,10 +148,17 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
         
-        # Timeout settings
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        # Increased timeouts for large responses
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        
+        # Buffer settings for large responses
+        proxy_buffering on;
+        proxy_buffer_size 256k;
+        proxy_buffers 8 256k;
+        proxy_busy_buffers_size 512k;
+        proxy_max_temp_file_size 2048m;
     }
 }
 EOF
