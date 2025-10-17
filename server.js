@@ -9,12 +9,9 @@ const app = express();
 // Set to "subdomain" to use catalog.starkrblx.com
 // Set to "path" to use starkrblx.com/catalog
 const ROUTING_MODE = "path";  // Options: "subdomain" or "path"
-<<<<<<< HEAD
 
 // API Authentication Key
 const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
-=======
->>>>>>> 0ed83dff68a42e54210a91673a2d0f816e48347d
 
 // List of allowed Roblox domains
 const domains = [
