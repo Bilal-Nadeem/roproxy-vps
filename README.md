@@ -24,9 +24,7 @@ That's it! The script will:
 LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc
 ```
 
-**Routing Mode**
-- Default: `path` mode (`domain.com/catalog/v1/...`)
-- Change in `server.js` if you want `subdomain` mode (`catalog.domain.com/v1/...`)
+**Routing Mode**: Path-based (e.g., `domain.com/catalog/v1/...`)
 
 ## Usage
 
@@ -52,6 +50,17 @@ if response.Success then
     local data = HttpService:JSONDecode(response.Body)
     print("Success:", data)
 end
+```
+
+### From JavaScript
+```javascript
+fetch("https://yourdomain.com/catalog/v1/assets/2510233257/bundles?limit=100", {
+    headers: {
+        "x-api-key": "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc"
+    }
+})
+.then(res => res.json())
+.then(data => console.log(data));
 ```
 
 ## Authentication
@@ -82,28 +91,35 @@ sudo systemctl restart nginx
 ## Features
 
 - ✅ API key authentication
-- ✅ Path-based routing (default)
+- ✅ Path-based routing
 - ✅ SSL/HTTPS auto-configured
 - ✅ Large response support (up to 2GB)
 - ✅ Auto-restart on crash
-- ✅ Simple configuration
+- ✅ Simple, clean code
 
 ## Supported Roblox APIs
 
 All standard Roblox API subdomains:
-`apis`, `assets`, `assetdelivery`, `avatar`, `badges`, `catalog`, `chat`, `contacts`, `contentstore`, `develop`, `economy`, `friends`, `games`, `groups`, `inventory`, `notifications`, `presence`, `search`, `thumbnails`, `trades`, `users`, etc.
+`apis`, `assets`, `assetdelivery`, `avatar`, `badges`, `catalog`, `chat`, `contacts`, `contentstore`, `develop`, `economy`, `friends`, `games`, `groups`, `inventory`, `notifications`, `presence`, `search`, `thumbnails`, `trades`, `users`, and more.
 
 ## Examples
 
 ```bash
 # Get user info
-curl -H "x-api-key: YOUR_KEY" https://yourdomain.com/users/v1/users/1
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  https://yourdomain.com/users/v1/users/1
 
 # Search catalog
-curl -H "x-api-key: YOUR_KEY" "https://yourdomain.com/catalog/v1/search/items?keyword=hat"
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  "https://yourdomain.com/catalog/v1/search/items?keyword=hat"
 
 # Get thumbnails
-curl -H "x-api-key: YOUR_KEY" "https://yourdomain.com/thumbnails/v1/users/avatar?userIds=1"
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  "https://yourdomain.com/thumbnails/v1/users/avatar?userIds=1"
+
+# Get asset bundles
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  "https://yourdomain.com/catalog/v1/assets/2510233257/bundles?limit=100&sortOrder=Asc"
 ```
 
 ## Troubleshooting
@@ -123,6 +139,17 @@ sudo certbot renew --dry-run
 **Restart Everything**
 ```bash
 sudo systemctl restart roproxy nginx
+```
+
+## File Structure
+
+```
+roproxy-vps/
+├── server.js          # Main proxy server
+├── setup.sh           # Automated setup script
+├── package.json       # Node.js dependencies
+├── nginx.conf         # Reference nginx config
+└── README.md          # This file
 ```
 
 ## License

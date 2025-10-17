@@ -143,8 +143,20 @@ echo ""
 echo "Setting up SSL..."
 read -p "Press Enter to continue..."
 
+# Kill any existing certbot processes and clean lock files
+pkill certbot 2>/dev/null || true
+rm -rf /tmp/certbot-* 2>/dev/null || true
+rm -f /var/lib/letsencrypt/.certbot.lock 2>/dev/null || true
+sleep 1
+
 certbot --nginx -d $DOMAIN --agree-tos --email $EMAIL --redirect --non-interactive || {
-    echo "SSL failed. You can retry with: sudo certbot --nginx -d $DOMAIN"
+    echo "SSL failed. Cleaning up and retrying..."
+    pkill -9 certbot 2>/dev/null || true
+    rm -rf /tmp/certbot-* 2>/dev/null || true
+    sleep 2
+    certbot --nginx -d $DOMAIN --agree-tos --email $EMAIL --redirect --non-interactive || {
+        echo "SSL setup failed. You can retry with: sudo certbot --nginx -d $DOMAIN"
+    }
 }
 
 echo ""
