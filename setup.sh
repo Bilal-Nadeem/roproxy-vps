@@ -32,6 +32,46 @@ if [ "$CONFIRM" != "y" ]; then
     exit 1
 fi
 
+# Clean up old installation
+echo ""
+echo "Cleaning up old installation..."
+
+# Stop and disable old service
+if systemctl is-active --quiet roproxy 2>/dev/null; then
+    echo "Stopping old service..."
+    systemctl stop roproxy
+fi
+
+if systemctl is-enabled --quiet roproxy 2>/dev/null; then
+    echo "Disabling old service..."
+    systemctl disable roproxy
+fi
+
+# Remove old service file
+if [ -f /etc/systemd/system/roproxy.service ]; then
+    echo "Removing old service file..."
+    rm -f /etc/systemd/system/roproxy.service
+    systemctl daemon-reload
+fi
+
+# Remove old nginx configs
+if [ -f /etc/nginx/sites-enabled/roproxy ]; then
+    echo "Removing old nginx config..."
+    rm -f /etc/nginx/sites-enabled/roproxy
+fi
+
+if [ -f /etc/nginx/sites-available/roproxy ]; then
+    rm -f /etc/nginx/sites-available/roproxy
+fi
+
+# Remove old project files
+if [ -d /opt/roproxy ]; then
+    echo "Removing old project files..."
+    rm -rf /opt/roproxy
+fi
+
+echo "✓ Cleanup complete"
+
 # Install Node.js
 echo ""
 echo "Installing Node.js..."
@@ -117,6 +157,7 @@ User=root
 WorkingDirectory=$PROJECT_DIR
 Environment=NODE_ENV=production
 Environment=PORT=$NODE_PORT
+Environment=NODE_OPTIONS=--max-old-space-size=4096
 ExecStart=/usr/bin/node $PROJECT_DIR/server.js
 Restart=always
 
@@ -158,6 +199,11 @@ certbot --nginx -d $DOMAIN --agree-tos --email $EMAIL --redirect --non-interacti
         echo "SSL setup failed. You can retry with: sudo certbot --nginx -d $DOMAIN"
     }
 }
+
+# Fix port in nginx config (certbot might have changed it)
+echo "Ensuring correct port configuration..."
+sed -i "s/localhost:3000/localhost:$NODE_PORT/g" /etc/nginx/sites-available/roproxy
+nginx -t && systemctl reload nginx
 
 echo ""
 echo "============================================"

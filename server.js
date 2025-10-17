@@ -85,17 +85,15 @@ app.all('*', async (req, res) => {
 
         const response = await fetch(targetUrl, fetchOptions);
         
-        // Copy response headers
-        const responseHeaders = {};
+        // Copy response headers (excluding problematic ones)
+        const skipHeaders = ['content-length', 'transfer-encoding', 'connection', 'keep-alive'];
         response.headers.forEach((value, key) => {
-            responseHeaders[key] = value;
+            if (!skipHeaders.includes(key.toLowerCase())) {
+                res.setHeader(key, value);
+            }
         });
 
         res.status(response.status);
-        Object.keys(responseHeaders).forEach(key => {
-            res.setHeader(key, responseHeaders[key]);
-        });
-
         const body = await response.buffer();
         res.send(body);
 
