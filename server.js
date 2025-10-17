@@ -8,7 +8,10 @@ const app = express();
 // Configuration
 // Set to "subdomain" to use catalog.starkrblx.com
 // Set to "path" to use starkrblx.com/catalog
-const ROUTING_MODE = "subdomain";  // Options: "subdomain" or "path"
+const ROUTING_MODE = "path";  // Options: "subdomain" or "path"
+
+// API Authentication Key
+const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
 
 // List of allowed Roblox domains
 const domains = [
@@ -47,6 +50,25 @@ const domains = [
 // Middleware to parse request body
 app.use(express.json());
 app.use(express.raw({ type: '*/*', limit: '50mb' }));
+
+// API Key Authentication Middleware
+app.use((req, res, next) => {
+    const providedKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+    
+    if (!providedKey) {
+        return res.status(401).json({ 
+            message: "API key required. Please provide 'x-api-key' header or 'Authorization: Bearer <key>' header." 
+        });
+    }
+    
+    if (providedKey !== API_KEY) {
+        return res.status(403).json({ 
+            message: "Invalid API key." 
+        });
+    }
+    
+    next();
+});
 
 // Main proxy handler
 app.all('*', async (req, res) => {

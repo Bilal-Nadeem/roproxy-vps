@@ -234,20 +234,81 @@ sudo certbot renew --dry-run
 
 ---
 
-## 🧪 Testing Your Proxy
+## 🔐 API Authentication
 
-### Health Check
+This proxy requires API key authentication. All requests must include a valid API key.
+
+### How to Use the API Key
+
+Include the API key in one of two ways:
+
+**Option 1: Using x-api-key header**
 ```bash
-curl https://yourdomain.com/health
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  https://yourdomain.com/users/v1/users/1
 ```
 
-### Test Roblox API Proxying
+**Option 2: Using Authorization Bearer token**
 ```bash
-# Get Roblox user info
-curl https://yourdomain.com/users/v1/users/1
+curl -H "Authorization: Bearer LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  https://yourdomain.com/users/v1/users/1
+```
 
-# Search catalog
-curl https://yourdomain.com/catalog/v1/search/items?keyword=hat
+### Error Responses
+
+**Missing API key (401):**
+```json
+{
+  "message": "API key required. Please provide 'x-api-key' header or 'Authorization: Bearer <key>' header."
+}
+```
+
+**Invalid API key (403):**
+```json
+{
+  "message": "Invalid API key."
+}
+```
+
+---
+
+## 🧪 Testing Your Proxy
+
+### Routing Mode
+
+The proxy is configured in **path mode** by default, which means:
+- ✅ Use format: `https://yourdomain.com/catalog/v1/...`
+- ✅ The Roblox API subdomain (catalog, users, etc.) is part of the path
+
+If you prefer **subdomain mode** instead:
+- Change `ROUTING_MODE` to `"subdomain"` in `server.js`
+- Use format: `https://catalog.yourdomain.com/v1/...`
+- Configure DNS A records for each subdomain you want to use
+
+### Test Roblox API Proxying (with authentication)
+
+**Get Roblox user info:**
+```bash
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  https://yourdomain.com/users/v1/users/1
+```
+
+**Search catalog:**
+```bash
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  https://yourdomain.com/catalog/v1/search/items?keyword=hat
+```
+
+**Get asset bundles:**
+```bash
+curl -H "x-api-key: LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  "https://yourdomain.com/catalog/v1/assets/2510233257/bundles?limit=100&sortOrder=Asc"
+```
+
+**Using Authorization Bearer:**
+```bash
+curl -H "Authorization: Bearer LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc" \
+  https://yourdomain.com/users/v1/users/1
 ```
 
 ---
