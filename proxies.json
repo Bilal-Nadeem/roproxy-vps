@@ -1,0 +1,13 @@
+{
+  "username": "mrstark_5vBlJ",
+  "password": "Mrstark_98765",
+  "country": "US",
+  "proxies": [
+    "dc.oxylabs.io:8001",
+    "dc.oxylabs.io:8002",
+    "dc.oxylabs.io:8003",
+    "dc.oxylabs.io:8004",
+    "dc.oxylabs.io:8005"
+  ]
+}
+

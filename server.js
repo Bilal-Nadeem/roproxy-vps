@@ -1,12 +1,32 @@
-// Starkrblx Proxy - VPS Version (Path Mode)
+// Starkrblx Proxy - VPS Version (Path Mode) with Rotating Proxies
 
 const express = require('express');
 const fetch = require('node-fetch');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const fs = require('fs');
 
 const app = express();
 
 // Configuration
 const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
+
+// Load proxy configuration
+const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
+const proxyAgents = proxyConfig.proxies.map(proxy => {
+    const proxyUrl = `http://user-${proxyConfig.username}-country-${proxyConfig.country}:${proxyConfig.password}@${proxy}`;
+    return new HttpsProxyAgent(proxyUrl);
+});
+
+// Add null for direct connection (server's own IP)
+const connectionPool = [...proxyAgents, null];
+let currentConnectionIndex = 0;
+
+// Function to get next connection (rotate through proxies + direct)
+function getNextConnection() {
+    const connection = connectionPool[currentConnectionIndex];
+    currentConnectionIndex = (currentConnectionIndex + 1) % connectionPool.length;
+    return connection;
+}
 
 // List of allowed Roblox domains
 const domains = [
@@ -75,9 +95,13 @@ app.all('*', async (req, res) => {
     const targetUrl = `https://${robloxSubdomain}.roblox.com/${targetPath}${queryString}`;
 
     try {
+        // Get next connection from the pool (rotates through proxies + direct)
+        const agent = getNextConnection();
+        
         const fetchOptions = {
             method: req.method,
             headers: headers,
+            agent: agent, // Will be proxy agent or null (direct connection)
         };
 
         if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -108,4 +132,6 @@ app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
     console.log(`Mode: Path-based routing (e.g., /catalog/v1/...)`);
     console.log(`Authentication: Enabled`);
+    console.log(`Proxy Rotation: Enabled (${proxyConfig.proxies.length} proxies + 1 direct connection)`);
+    console.log(`Total connection pool size: ${connectionPool.length}`);
 });

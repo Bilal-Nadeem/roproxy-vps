@@ -10,7 +10,8 @@
     "keywords": ["roblox", "proxy", "nginx", "nodejs"],
     "dependencies": {
         "express": "^4.21.2",
-        "node-fetch": "^2.7.0"
+        "node-fetch": "^2.7.0",
+        "https-proxy-agent": "^5.0.1"
     },
     "devDependencies": {
         "nodemon": "^3.0.1"
