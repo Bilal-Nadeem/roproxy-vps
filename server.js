@@ -13,7 +13,7 @@ const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
 // Load proxy configuration
 const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
 const proxyAgents = proxyConfig.proxies.map(proxy => {
-    const proxyUrl = `http://user-${proxyConfig.username}-country-${proxyConfig.country}:${proxyConfig.password}@${proxy}`;
+    const proxyUrl = `http://${proxyConfig.username}:${proxyConfig.password}@${proxy}`;
     return new HttpsProxyAgent(proxyUrl);
 });
 
@@ -27,6 +27,8 @@ function getNextConnection() {
     currentConnectionIndex = (currentConnectionIndex + 1) % connectionPool.length;
     return connection;
 }
+
+console.log(`Loaded ${proxyAgents.length} proxies + 1 direct connection (${connectionPool.length} total)`);
 
 // List of allowed Roblox domains
 const domains = [
