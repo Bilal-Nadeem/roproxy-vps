@@ -18,36 +18,49 @@ let connectionPool;
 let currentConnectionIndex = 0;
 
 if (proxyConfig.enabled) {
-    // Create proxy agents
+    // Create proxy agents (for fallback only)
     const proxyAgents = proxyConfig.proxies.map(proxy => {
         const proxyUrl = `http://${proxyConfig.username}:${proxyConfig.password}@${proxy}`;
         return new HttpsProxyAgent(proxyUrl);
     });
     
-    // Add null for direct connection (server's own IP)
-    connectionPool = [...proxyAgents, null];
-    console.log(`Loaded ${proxyAgents.length} proxies + 1 direct connection (${connectionPool.length} total)`);
+    connectionPool = proxyAgents;
+    console.log(`Loaded ${proxyAgents.length} fallback proxies`);
+    console.log(`Strategy: Direct connection first, proxy fallback on failure`);
 } else {
     // Proxies disabled - use only direct connection
-    connectionPool = [null];
-    console.log('Proxy rotation disabled - using direct connection only');
+    connectionPool = [];
+    console.log('Proxy fallback disabled - using direct connection only');
 }
 
-// Function to get next connection (rotate through proxies + direct)
+// Function to get next proxy from pool (used for fallback retries)
 function getNextConnection() {
+    if (connectionPool.length === 0) {
+        return null; // No proxies available, use direct
+    }
     const connection = connectionPool[currentConnectionIndex];
     currentConnectionIndex = (currentConnectionIndex + 1) % connectionPool.length;
     return connection;
 }
 
-// Retry function with automatic proxy fallback
+// Retry function with proxy fallback strategy
+// Strategy: Try direct connection first, fall back to proxies on failure
 async function fetchWithRetry(url, options) {
     let lastError;
+    let agent;
     
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            // Get next proxy in rotation for each attempt
-            const agent = getNextConnection();
+            // Attempt 1: Always try direct connection first (fastest)
+            // Attempts 2+: Use rotating proxies (fallback for rate limits)
+            if (attempt === 1) {
+                agent = null; // Direct connection
+            } else if (proxyConfig.enabled) {
+                agent = getNextConnection(); // Get next proxy
+            } else {
+                agent = null; // No proxies available, retry direct
+            }
+            
             const fetchOptions = {
                 ...options,
                 agent: agent,
@@ -56,26 +69,33 @@ async function fetchWithRetry(url, options) {
             
             const response = await fetch(url, fetchOptions);
             
-            // Log successful connection after a retry
-            if (attempt > 1) {
-                console.log(`[Success] Request succeeded on attempt ${attempt}`);
+            // Log successful fallback to proxy
+            if (attempt > 1 && agent !== null) {
+                console.log(`[Success] Request succeeded using proxy fallback (attempt ${attempt})`);
             }
             
             return response; // Success!
             
         } catch (error) {
             lastError = error;
-            console.log(`[Attempt ${attempt}/${MAX_RETRIES}] Failed - ${error.code || error.message.substring(0, 80)}`);
+            const connType = agent === null ? 'Direct' : 'Proxy';
             
-            // Don't delay on last attempt
+            // Only log if it's a real error (not just switching to proxy)
+            if (attempt === 1) {
+                console.log(`[${connType}] Failed, trying proxy fallback... (${error.code || 'error'})`);
+            } else {
+                console.log(`[Attempt ${attempt}/${MAX_RETRIES}] ${connType} failed - ${error.code || error.message.substring(0, 60)}`);
+            }
+            
+            // Small delay before retrying with proxy
             if (attempt < MAX_RETRIES) {
-                await new Promise(resolve => setTimeout(resolve, 300)); // Small delay before retry
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
         }
     }
     
     // All retries failed
-    console.log(`[Error] All ${MAX_RETRIES} attempts failed for ${url.substring(0, 100)}`);
+    console.log(`[Error] All ${MAX_RETRIES} attempts failed (1 direct + ${MAX_RETRIES - 1} proxy)`);
     throw lastError;
 }
 
@@ -180,11 +200,11 @@ app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
     console.log(`Mode: Path-based routing (e.g., /catalog/v1/...)`);
     console.log(`Authentication: Enabled`);
+    console.log(`Retry Strategy: Direct first, proxy fallback (${MAX_RETRIES} attempts max)`);
     
     if (proxyConfig.enabled) {
-        console.log(`Proxy Rotation: Enabled (${proxyConfig.proxies.length} proxies + 1 direct connection)`);
-        console.log(`Total connection pool size: ${connectionPool.length}`);
+        console.log(`Proxy Fallback: Enabled (${connectionPool.length} proxies available)`);
     } else {
-        console.log(`Proxy Rotation: Disabled (using direct connection only)`);
+        console.log(`Proxy Fallback: Disabled (direct connection only)`);
     }
 });
