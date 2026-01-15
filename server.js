@@ -12,14 +12,24 @@ const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
 
 // Load proxy configuration
 const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
-const proxyAgents = proxyConfig.proxies.map(proxy => {
-    const proxyUrl = `http://${proxyConfig.username}:${proxyConfig.password}@${proxy}`;
-    return new HttpsProxyAgent(proxyUrl);
-});
-
-// Add null for direct connection (server's own IP)
-const connectionPool = [...proxyAgents, null];
+let connectionPool;
 let currentConnectionIndex = 0;
+
+if (proxyConfig.enabled) {
+    // Create proxy agents
+    const proxyAgents = proxyConfig.proxies.map(proxy => {
+        const proxyUrl = `http://${proxyConfig.username}:${proxyConfig.password}@${proxy}`;
+        return new HttpsProxyAgent(proxyUrl);
+    });
+    
+    // Add null for direct connection (server's own IP)
+    connectionPool = [...proxyAgents, null];
+    console.log(`Loaded ${proxyAgents.length} proxies + 1 direct connection (${connectionPool.length} total)`);
+} else {
+    // Proxies disabled - use only direct connection
+    connectionPool = [null];
+    console.log('Proxy rotation disabled - using direct connection only');
+}
 
 // Function to get next connection (rotate through proxies + direct)
 function getNextConnection() {
@@ -27,8 +37,6 @@ function getNextConnection() {
     currentConnectionIndex = (currentConnectionIndex + 1) % connectionPool.length;
     return connection;
 }
-
-console.log(`Loaded ${proxyAgents.length} proxies + 1 direct connection (${connectionPool.length} total)`);
 
 // List of allowed Roblox domains
 const domains = [
@@ -134,6 +142,11 @@ app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
     console.log(`Mode: Path-based routing (e.g., /catalog/v1/...)`);
     console.log(`Authentication: Enabled`);
-    console.log(`Proxy Rotation: Enabled (${proxyConfig.proxies.length} proxies + 1 direct connection)`);
-    console.log(`Total connection pool size: ${connectionPool.length}`);
+    
+    if (proxyConfig.enabled) {
+        console.log(`Proxy Rotation: Enabled (${proxyConfig.proxies.length} proxies + 1 direct connection)`);
+        console.log(`Total connection pool size: ${connectionPool.length}`);
+    } else {
+        console.log(`Proxy Rotation: Disabled (using direct connection only)`);
+    }
 });
