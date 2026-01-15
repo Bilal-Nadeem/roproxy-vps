@@ -9,6 +9,8 @@ const app = express();
 
 // Configuration
 const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
+const MAX_RETRIES = 3;  // Number of retry attempts
+const REQUEST_TIMEOUT = 15000;  // Timeout in milliseconds (15 seconds)
 
 // Load proxy configuration
 const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
@@ -36,6 +38,45 @@ function getNextConnection() {
     const connection = connectionPool[currentConnectionIndex];
     currentConnectionIndex = (currentConnectionIndex + 1) % connectionPool.length;
     return connection;
+}
+
+// Retry function with automatic proxy fallback
+async function fetchWithRetry(url, options) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            // Get next proxy in rotation for each attempt
+            const agent = getNextConnection();
+            const fetchOptions = {
+                ...options,
+                agent: agent,
+                timeout: REQUEST_TIMEOUT,
+            };
+            
+            const response = await fetch(url, fetchOptions);
+            
+            // Log successful connection after a retry
+            if (attempt > 1) {
+                console.log(`[Success] Request succeeded on attempt ${attempt}`);
+            }
+            
+            return response; // Success!
+            
+        } catch (error) {
+            lastError = error;
+            console.log(`[Attempt ${attempt}/${MAX_RETRIES}] Failed - ${error.code || error.message.substring(0, 80)}`);
+            
+            // Don't delay on last attempt
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, 300)); // Small delay before retry
+            }
+        }
+    }
+    
+    // All retries failed
+    console.log(`[Error] All ${MAX_RETRIES} attempts failed for ${url.substring(0, 100)}`);
+    throw lastError;
 }
 
 // List of allowed Roblox domains
@@ -105,20 +146,17 @@ app.all('*', async (req, res) => {
     const targetUrl = `https://${robloxSubdomain}.roblox.com/${targetPath}${queryString}`;
 
     try {
-        // Get next connection from the pool (rotates through proxies + direct)
-        const agent = getNextConnection();
-        
         const fetchOptions = {
             method: req.method,
             headers: headers,
-            agent: agent, // Will be proxy agent or null (direct connection)
         };
 
         if (req.method !== 'GET' && req.method !== 'HEAD') {
             fetchOptions.body = req.body;
         }
 
-        const response = await fetch(targetUrl, fetchOptions);
+        // Use retry logic with automatic proxy rotation on failure
+        const response = await fetchWithRetry(targetUrl, fetchOptions);
         
         // Only copy content-type header (like Cloudflare)
         const contentType = response.headers.get('content-type');
