@@ -9,9 +9,10 @@ const app = express();
 
 // Configuration
 const API_KEY = "LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc";
-const MAX_RETRIES = 5;  // Number of retry attempts (increased for rate limits)
+const MAX_RETRIES = 3;  // Number of retry attempts
 const REQUEST_TIMEOUT = 20000;  // Timeout in milliseconds (20 seconds)
 const RATE_LIMIT_RETRY_DELAY = 100;  // Delay between 429 retries (ms)
+const USE_DIRECT_CONNECTION = false;  // Set to true to try direct first, false for proxy-only
 
 // Load proxy configuration
 const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
@@ -69,8 +70,8 @@ function getNextConnection() {
     return connection;
 }
 
-// Retry function with proxy fallback strategy
-// Strategy: Try direct connection first, fall back to proxies on failure or rate limits
+// Retry function with load balancing strategy
+// Strategy: Load balance across proxies, retry on failure
 async function fetchWithRetry(url, options, requestPath) {
     let lastError;
     let lastResponse;
@@ -83,19 +84,20 @@ async function fetchWithRetry(url, options, requestPath) {
         let ipKey;
         
         try {
-            // Attempt 1: Always try direct connection first (fastest)
-            // Attempts 2+: Use rotating proxies (fallback for rate limits)
-            if (attempt === 1) {
-                agent = null; // Direct connection
+            // Choose connection based on strategy
+            if (!proxyConfig.enabled || (USE_DIRECT_CONNECTION && attempt === 1)) {
+                // Use direct connection if proxies disabled or if configured to try direct first
+                agent = null;
                 ipKey = 'direct';
-            } else if (proxyConfig.enabled) {
-                const proxyIndex = currentConnectionIndex;
-                agent = getNextConnection(); // Get next proxy
-                ipKey = `proxy-${proxyIndex}`;
-                stats.proxyFallbacks++;
             } else {
-                agent = null; // No proxies available, retry direct
-                ipKey = 'direct';
+                // Use proxies with round-robin load balancing
+                const proxyIndex = currentConnectionIndex;
+                agent = getNextConnection();
+                ipKey = `proxy-${proxyIndex}`;
+                
+                if (attempt > 1) {
+                    stats.proxyFallbacks++;
+                }
             }
             
             // Track request per IP
@@ -118,19 +120,19 @@ async function fetchWithRetry(url, options, requestPath) {
                                response.status === 502;
             
             if (shouldRetry && attempt < MAX_RETRIES) {
-                const connType = agent === null ? 'Direct' : `Proxy-${currentConnectionIndex}`;
+                const connType = agent === null ? 'Direct' : `Proxy-${(currentConnectionIndex - 1 + connectionPool.length) % connectionPool.length}`;
                 
                 if (isRateLimited) {
                     stats.rateLimitHits++;
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].rateLimits++;
                     }
-                    console.log(`[RATE LIMIT] ${connType} - ${response.status} on ${requestPath} - Attempt ${attempt}/${MAX_RETRIES}`);
+                    console.log(`[RATE LIMIT] ${connType} - ${response.status} - Retrying... (${attempt}/${MAX_RETRIES})`);
                 } else {
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].errors++;
                     }
-                    console.log(`[${connType}] Got ${response.status}, trying proxy fallback...`);
+                    console.log(`[${connType}] Got ${response.status}, retrying with next proxy...`);
                 }
                 
                 lastResponse = response;
@@ -143,22 +145,22 @@ async function fetchWithRetry(url, options, requestPath) {
             
             if (attempt > 1) {
                 stats.successfulRetries++;
-                const connType = agent === null ? 'Direct' : `Proxy-${currentConnectionIndex}`;
+                const connType = agent === null ? 'Direct' : `Proxy-${(currentConnectionIndex - 1 + connectionPool.length) % connectionPool.length}`;
                 if (!shouldRetry) {
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].successes++;
                     }
-                    console.log(`[✓ SUCCESS] ${connType} - ${response.status} on ${requestPath} (attempt ${attempt}, ${duration}ms)`);
+                    console.log(`[✓ RETRY SUCCESS] ${connType} - ${response.status} (${duration}ms)`);
                 } else {
                     // Final attempt but still rate limited
                     stats.errors++;
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].errors++;
                     }
-                    console.log(`[✗ FAILED] All retries exhausted - ${response.status} on ${requestPath} (${duration}ms)`);
+                    console.log(`[✗ FAILED] All retries exhausted - ${response.status} (${duration}ms)`);
                 }
             } else if (!shouldRetry && response.status === 200) {
-                // First attempt success
+                // First attempt success - don't log (too verbose)
                 if (stats.perIP[ipKey]) {
                     stats.perIP[ipKey].successes++;
                 }
@@ -168,20 +170,16 @@ async function fetchWithRetry(url, options, requestPath) {
             
         } catch (error) {
             lastError = error;
-            const connType = agent === null ? 'Direct' : `Proxy-${currentConnectionIndex}`;
+            const connType = agent === null ? 'Direct' : `Proxy-${(currentConnectionIndex - 1 + connectionPool.length) % connectionPool.length}`;
             
             // Track error per IP
             if (stats.perIP[ipKey]) {
                 stats.perIP[ipKey].errors++;
             }
             
-            if (attempt === 1) {
-                console.log(`[${connType}] Connection failed, trying proxy... (${error.code || 'error'})`);
-            } else {
-                console.log(`[Attempt ${attempt}/${MAX_RETRIES}] ${connType} failed - ${error.code || error.message.substring(0, 60)}`);
-            }
+            console.log(`[✗ ${connType}] ${error.code || error.message.substring(0, 50)} - Retry ${attempt}/${MAX_RETRIES}`);
             
-            // Small delay before retrying with proxy
+            // Small delay before retrying with next proxy
             if (attempt < MAX_RETRIES) {
                 await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY));
             }
@@ -191,7 +189,7 @@ async function fetchWithRetry(url, options, requestPath) {
     // All retries failed
     stats.errors++;
     const duration = Date.now() - startTime;
-    console.log(`[✗ ERROR] All ${MAX_RETRIES} attempts failed for ${requestPath} (${duration}ms)`);
+    console.log(`[✗ ALL FAILED] ${MAX_RETRIES} attempts exhausted (${duration}ms)`);
     
     // Return last response if we have one, otherwise throw error
     if (lastResponse) {
@@ -381,11 +379,16 @@ app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
     console.log(`Mode: Path-based routing (e.g., /catalog/v1/...)`);
     console.log(`Authentication: Enabled`);
-    console.log(`Retry Strategy: Direct first, proxy fallback (${MAX_RETRIES} attempts max)`);
     
     if (proxyConfig.enabled) {
-        console.log(`Proxy Fallback: Enabled (${connectionPool.length} proxies available)`);
+        if (USE_DIRECT_CONNECTION) {
+            console.log(`Strategy: Direct first, proxy fallback (${MAX_RETRIES} attempts max)`);
+            console.log(`Proxy Pool: ${connectionPool.length} proxies available`);
+        } else {
+            console.log(`Strategy: Round-robin load balancing across ${connectionPool.length} proxies`);
+            console.log(`Direct Connection: Disabled (proxy-only mode for rate limit bypass)`);
+        }
     } else {
-        console.log(`Proxy Fallback: Disabled (direct connection only)`);
+        console.log(`Strategy: Direct connection only (no proxies)`);
     }
 });
