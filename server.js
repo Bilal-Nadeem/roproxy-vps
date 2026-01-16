@@ -14,6 +14,7 @@ const MAX_RETRIES = 3;  // Number of retry attempts
 const REQUEST_TIMEOUT = 20000;  // Timeout in milliseconds (20 seconds)
 const RATE_LIMIT_RETRY_DELAY = 100;  // Delay between 429 retries (ms)
 const USE_DIRECT_CONNECTION = false;  // Set to true to try direct first, false for proxy-only
+const VERBOSE_LOGGING = true;  // Set to false to only log errors/retries
 
 // Load proxy configuration
 const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
@@ -143,10 +144,10 @@ async function fetchWithRetry(url, options, requestPath) {
             
             // Success! (or final attempt)
             const duration = Date.now() - startTime;
+            const connType = agent === null ? 'Direct' : `Proxy-${(currentConnectionIndex - 1 + connectionPool.length) % connectionPool.length}`;
             
             if (attempt > 1) {
                 stats.successfulRetries++;
-                const connType = agent === null ? 'Direct' : `Proxy-${(currentConnectionIndex - 1 + connectionPool.length) % connectionPool.length}`;
                 if (!shouldRetry) {
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].successes++;
@@ -160,10 +161,16 @@ async function fetchWithRetry(url, options, requestPath) {
                     }
                     console.log(`[✗ FAILED] All retries exhausted - ${response.status} on ${requestPath} (${duration}ms)`);
                 }
-            } else if (!shouldRetry && response.status === 200) {
-                // First attempt success - only track in stats
-                if (stats.perIP[ipKey]) {
-                    stats.perIP[ipKey].successes++;
+            } else {
+                // First attempt
+                if (!shouldRetry && response.status === 200) {
+                    // Success on first try
+                    if (stats.perIP[ipKey]) {
+                        stats.perIP[ipKey].successes++;
+                    }
+                    if (VERBOSE_LOGGING) {
+                        console.log(`[${connType}] ${response.status} ${requestPath.split('?')[0]} (${duration}ms)`);
+                    }
                 }
             }
             
@@ -878,6 +885,7 @@ app.listen(PORT, () => {
     console.log(`Proxy server running on port ${PORT}`);
     console.log(`Mode: Path-based routing (e.g., /catalog/v1/...)`);
     console.log(`Authentication: Enabled`);
+    console.log(`Logging: ${VERBOSE_LOGGING ? 'Verbose (all requests)' : 'Quiet (errors only)'}`);
     
     if (proxyConfig.enabled) {
         if (USE_DIRECT_CONNECTION) {
