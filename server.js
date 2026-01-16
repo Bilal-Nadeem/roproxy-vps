@@ -198,6 +198,340 @@ async function fetchWithRetry(url, options, requestPath) {
     throw lastError;
 }
 
+// Dashboard HTML generator
+function getDashboardHTML() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoProxy Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            background: #0a0a0a;
+            color: #fff;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 { font-size: 28px; font-weight: 600; }
+        .status { display: flex; align-items: center; gap: 12px; }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ff00;
+            box-shadow: 0 0 12px #00ff00;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #fff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-box {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 16px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .table-container { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            background: #0a0a0a;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 1px solid #333;
+            color: #888;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #222;
+        }
+        tr:hover { background: #0a0a0a; }
+        .success { color: #00ff00; }
+        .warning { color: #ffaa00; }
+        .error { color: #ff4444; }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-success { background: #00ff0020; color: #00ff00; border: 1px solid #00ff00; }
+        .badge-warning { background: #ffaa0020; color: #ffaa00; border: 1px solid #ffaa00; }
+        .badge-error { background: #ff444420; color: #ff4444; border: 1px solid #ff4444; }
+        .refresh-btn {
+            padding: 8px 16px;
+            background: #fff;
+            color: #0a0a0a;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .refresh-btn:hover { background: #e0e0e0; }
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+        }
+        .config-item {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 12px;
+        }
+        .config-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .config-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #00aa00);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ RoProxy Dashboard</h1>
+            <div class="status">
+                <div class="status-dot"></div>
+                <span id="statusText">Online</span>
+                <button class="refresh-btn" onclick="loadStats()">↻ Refresh</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Overall Performance</h2>
+            <div class="stats-grid" id="overallStats">
+                <div class="stat-box">
+                    <div class="stat-value" id="totalRequests">-</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="rateLimits">-</div>
+                    <div class="stat-label">Rate Limits Hit</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="proxyFallbacks">-</div>
+                    <div class="stat-label">Proxy Fallbacks</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="successRate">-</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="errors">-</div>
+                    <div class="stat-label">Total Errors</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="uptime">-</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Configuration</h2>
+            <div class="config-grid" id="configGrid"></div>
+        </div>
+
+        <div class="card">
+            <h2>Proxy Performance</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Connection</th>
+                            <th>IP Address</th>
+                            <th>Status</th>
+                            <th>Requests</th>
+                            <th>Rate Limits</th>
+                            <th>Errors</th>
+                            <th>Successes</th>
+                            <th>Success Rate</th>
+                            <th>Health</th>
+                        </tr>
+                    </thead>
+                    <tbody id="proxyTableBody">
+                        <tr><td colspan="9" style="text-align: center;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+
+        function loadStats() {
+            fetch('/__stats')
+                .then(r => r.json())
+                .then(data => displayStats(data))
+                .catch(err => console.error('Failed to load stats:', err));
+        }
+
+        function displayStats(data) {
+            // Overall stats
+            document.getElementById('totalRequests').textContent = data.overall.totalRequests.toLocaleString();
+            document.getElementById('rateLimits').textContent = data.overall.rateLimitHits.toLocaleString();
+            document.getElementById('proxyFallbacks').textContent = data.overall.proxyFallbacks.toLocaleString();
+            document.getElementById('errors').textContent = data.overall.errors.toLocaleString();
+            document.getElementById('uptime').textContent = data.uptime;
+            
+            const successRate = parseFloat(data.overall.successRate);
+            const successEl = document.getElementById('successRate');
+            successEl.textContent = data.overall.successRate;
+            successEl.className = 'stat-value ' + (successRate >= 95 ? 'success' : successRate >= 80 ? 'warning' : 'error');
+
+            // Configuration
+            const configGrid = document.getElementById('configGrid');
+            configGrid.innerHTML = \`
+                <div class="config-item">
+                    <div class="config-label">Max Retries</div>
+                    <div class="config-value">\${data.config.maxRetries}</div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Request Timeout</div>
+                    <div class="config-value">\${data.config.requestTimeout}ms</div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Proxies Enabled</div>
+                    <div class="config-value">\${data.config.proxiesEnabled ? '✓ Yes' : '✗ No'}</div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Proxy Count</div>
+                    <div class="config-value">\${data.config.proxyCount}</div>
+                </div>
+            \`;
+
+            // Proxy table
+            const tbody = document.getElementById('proxyTableBody');
+            tbody.innerHTML = '';
+
+            const sorted = Object.entries(data.perIP).sort((a, b) => b[1].requests - a[1].requests);
+
+            sorted.forEach(([key, stats]) => {
+                if (stats.requests === 0) return;
+
+                const displayName = key === 'direct' ? 'Direct' : key;
+                const ipAddress = stats.ip || 'Server IP';
+                const successRate = parseFloat(stats.successRate);
+                
+                let statusBadge = '';
+                let healthBar = '';
+                
+                if (successRate >= 95) {
+                    statusBadge = '<span class="badge badge-success">Healthy</span>';
+                    healthBar = \`<div class="progress-bar"><div class="progress-fill" style="width: \${successRate}%; background: linear-gradient(90deg, #00ff00, #00aa00);"></div></div>\`;
+                } else if (successRate >= 50) {
+                    statusBadge = '<span class="badge badge-warning">Degraded</span>';
+                    healthBar = \`<div class="progress-bar"><div class="progress-fill" style="width: \${successRate}%; background: linear-gradient(90deg, #ffaa00, #ff8800);"></div></div>\`;
+                } else {
+                    statusBadge = '<span class="badge badge-error">Failing</span>';
+                    healthBar = \`<div class="progress-bar"><div class="progress-fill" style="width: \${successRate}%; background: linear-gradient(90deg, #ff4444, #cc0000);"></div></div>\`;
+                }
+
+                const row = \`
+                    <tr>
+                        <td><strong>\${displayName}</strong></td>
+                        <td><code>\${ipAddress}</code></td>
+                        <td>\${statusBadge}</td>
+                        <td>\${stats.requests.toLocaleString()}</td>
+                        <td class="\${stats.rateLimits > 0 ? 'warning' : ''}">\${stats.rateLimits.toLocaleString()}</td>
+                        <td class="\${stats.errors > 0 ? 'error' : ''}">\${stats.errors.toLocaleString()}</td>
+                        <td class="success">\${stats.successes.toLocaleString()}</td>
+                        <td class="\${successRate >= 95 ? 'success' : successRate >= 50 ? 'warning' : 'error'}">\${stats.successRate}</td>
+                        <td>\${healthBar}</td>
+                    </tr>
+                \`;
+                tbody.innerHTML += row;
+            });
+
+            if (sorted.length === 0 || sorted.every(([_, s]) => s.requests === 0)) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #888;">No data yet</td></tr>';
+            }
+        }
+
+        // Auto-refresh every 5 seconds
+        loadStats();
+        autoRefreshInterval = setInterval(loadStats, 5000);
+    </script>
+</body>
+</html>`;
+}
+
 // List of allowed Roblox domains
 const domains = [
     "apis", "assets", "assetdelivery", "avatar", "badges", "catalog",
@@ -288,6 +622,92 @@ app.get('/__health', (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
     res.json({ status: 'ok', proxies: connectionPool.length });
+});
+
+// Dashboard endpoint (password protected)
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '@Lua98765';
+app.get('/dashboard', (req, res) => {
+    const password = req.query.password;
+    
+    // Simple password check
+    if (password !== DASHBOARD_PASSWORD) {
+        return res.status(401).send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .login-box {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 40px;
+            width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 { margin-bottom: 24px; font-size: 24px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+        input:focus { outline: none; border-color: #fff; }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #fff;
+            color: #0a0a0a;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { background: #e0e0e0; }
+        .error { color: #ff4444; margin-top: 12px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>🔒 Dashboard Login</h1>
+        <form onsubmit="login(event)">
+            <input type="password" id="password" placeholder="Enter Password" autofocus>
+            <button type="submit">Access Dashboard</button>
+            ${password ? '<div class="error">Invalid password</div>' : ''}
+        </form>
+    </div>
+    <script>
+        function login(e) {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            window.location.href = '/dashboard?password=' + encodeURIComponent(password);
+        }
+    </script>
+</body>
+</html>
+        `);
+    }
+    
+    // Serve dashboard HTML
+    res.send(getDashboardHTML());
 });
 
 // API Key Authentication

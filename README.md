@@ -392,7 +392,36 @@ sudo ./update.sh
 
 ---
 
-## 📊 Monitoring
+## 📊 Monitoring & Dashboard
+
+### Web Dashboard
+
+Access the **real-time web dashboard** at:
+```
+https://yoursite.com/dashboard
+```
+
+**Default Password:** `admin123`
+
+**To change the password:**
+```bash
+# Set environment variable
+export DASHBOARD_PASSWORD=your_secure_password
+
+# Or in the systemd service file
+sudo nano /etc/systemd/system/roproxy.service
+# Add: Environment=DASHBOARD_PASSWORD=your_secure_password
+sudo systemctl daemon-reload
+sudo systemctl restart roproxy
+```
+
+**Dashboard Features:**
+- ✅ **Real-time stats** - Auto-refreshes every 5 seconds
+- ✅ **Overall performance** - Total requests, rate limits, success rate
+- ✅ **Per-proxy breakdown** - Individual proxy performance and health
+- ✅ **Dark theme** - Easy on the eyes for monitoring
+- ✅ **Health bars** - Visual proxy status indicators
+- ✅ **Configuration details** - Current server settings
 
 ### View real-time logs
 ```bash
@@ -411,6 +440,18 @@ df -h
 ### Check network connections
 ```bash
 sudo netstat -tulpn | grep node
+```
+
+### API Endpoints
+
+**Stats API (no auth):**
+```bash
+curl https://yoursite.com/__stats
+```
+
+**Health Check (no auth):**
+```bash
+curl https://yoursite.com/__health
 ```
 
 ---
