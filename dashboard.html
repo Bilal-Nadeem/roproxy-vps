@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoProxy Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: white;
+            margin-bottom: 24px;
+            font-size: 32px;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 16px;
+            font-size: 20px;
+        }
+
+        .login-card {
+            max-width: 500px;
+            margin: 100px auto;
+        }
+
+        input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="password"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .ip-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .ip-table th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .ip-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .ip-table tr:hover {
+            background: #f9f9f9;
+        }
+
+        .success-rate {
+            font-weight: bold;
+        }
+
+        .success-rate.good {
+            color: #22c55e;
+        }
+
+        .success-rate.medium {
+            color: #f59e0b;
+        }
+
+        .success-rate.bad {
+            color: #ef4444;
+        }
+
+        .error {
+            color: #ef4444;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .refresh-btn {
+            width: auto;
+            padding: 8px 16px;
+            margin-bottom: 16px;
+            background: #22c55e;
+        }
+
+        .logout-btn {
+            width: auto;
+            padding: 8px 16px;
+            margin-left: 8px;
+            background: #ef4444;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.online {
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 RoProxy Dashboard</h1>
+
+        <!-- Loading indicator -->
+        <div id="loadingCard" class="card login-card">
+            <h2>Loading Dashboard...</h2>
+            <p style="text-align: center; color: #666;">Connecting to proxy server...</p>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="hidden">
+            <div class="card">
+                <div class="header-actions">
+                    <button class="refresh-btn" onclick="loadStats()">🔄 Refresh</button>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <span class="status-indicator online"></span>
+                    <strong>Status:</strong> Online | <strong>Uptime:</strong> <span id="uptime">-</span>
+                </div>
+                <div style="margin-bottom: 12px; color: #666; font-size: 14px;">
+                    <strong>Connected to:</strong> <span id="connectedUrl"></span>
+                </div>
+                <div class="auto-refresh">
+                    <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+                    <label for="autoRefresh">Auto-refresh every 10 seconds</label>
+                </div>
+            </div>
+
+            <!-- Overall Stats -->
+            <div class="card">
+                <h2>Overall Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="totalRequests">-</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="rateLimits">-</div>
+                        <div class="stat-label">Rate Limits</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="proxyFallbacks">-</div>
+                        <div class="stat-label">Proxy Fallbacks</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="successRate">-</div>
+                        <div class="stat-label">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Per-IP Stats -->
+            <div class="card">
+                <h2>Per-IP Performance</h2>
+                <table class="ip-table">
+                    <thead>
+                        <tr>
+                            <th>Connection</th>
+                            <th>IP Address</th>
+                            <th>Requests</th>
+                            <th>Rate Limits</th>
+                            <th>Errors</th>
+                            <th>Successes</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ipTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-configured credentials
+        let proxyUrl = 'https://proxy.xn--pltan-sqa.com';
+        let apiKey = 'LuaBearyGood_2025_vR8kL3mN9pQ6sF4wX7jC5bH1gT2yK9nP1dc';
+        let autoRefreshInterval = null;
+
+        function showError(message) {
+            console.error('Dashboard error:', message);
+            // Just log errors, don't show login form
+            if (document.getElementById('loadingCard')) {
+                const loadingCard = document.getElementById('loadingCard');
+                loadingCard.innerHTML = `
+                    <h2>Connection Error</h2>
+                    <p style="color: #ef4444; margin: 12px 0;">${message}</p>
+                    <button onclick="loadStats()" style="width: auto; padding: 8px 16px; margin: 12px auto; display: block;">Retry</button>
+                `;
+            }
+        }
+
+        function toggleAutoRefresh() {
+            const enabled = document.getElementById('autoRefresh').checked;
+            if (enabled) {
+                autoRefreshInterval = setInterval(loadStats, 10000);
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+
+        async function loadStats() {
+            try {
+                console.log('Fetching stats from:', `${proxyUrl}/__stats`);
+                
+                const response = await fetch(`${proxyUrl}/__stats`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Stats loaded successfully:', data);
+                displayStats(data);
+
+                // Show dashboard, hide loading
+                if (document.getElementById('loadingCard')) {
+                    document.getElementById('loadingCard').classList.add('hidden');
+                }
+                document.getElementById('dashboard').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                showError(`Failed to connect to proxy: ${error.message}`);
+            }
+        }
+
+        function displayStats(data) {
+            // Connection info
+            document.getElementById('connectedUrl').textContent = proxyUrl;
+            
+            // Overall stats
+            document.getElementById('uptime').textContent = data.uptime;
+            document.getElementById('totalRequests').textContent = data.overall.totalRequests.toLocaleString();
+            document.getElementById('rateLimits').textContent = data.overall.rateLimitHits.toLocaleString();
+            document.getElementById('proxyFallbacks').textContent = data.overall.proxyFallbacks.toLocaleString();
+            document.getElementById('successRate').textContent = data.overall.successRate;
+
+            // Per-IP stats
+            const tbody = document.getElementById('ipTableBody');
+            tbody.innerHTML = '';
+
+            // Sort by requests descending
+            const sortedIPs = Object.entries(data.perIP).sort((a, b) => b[1].requests - a[1].requests);
+
+            sortedIPs.forEach(([key, stats]) => {
+                if (stats.requests === 0) return; // Skip unused IPs
+
+                const row = document.createElement('tr');
+                const displayName = key === 'direct' ? 'Direct' : key;
+                const ipAddress = stats.ip || 'Server IP';
+                
+                // Determine success rate color
+                const successRate = parseFloat(stats.successRate);
+                let rateClass = 'good';
+                if (successRate < 90) rateClass = 'medium';
+                if (successRate < 70) rateClass = 'bad';
+
+                row.innerHTML = `
+                    <td><strong>${displayName}</strong></td>
+                    <td>${ipAddress}</td>
+                    <td>${stats.requests.toLocaleString()}</td>
+                    <td>${stats.rateLimits.toLocaleString()}</td>
+                    <td>${stats.errors.toLocaleString()}</td>
+                    <td>${stats.successes.toLocaleString()}</td>
+                    <td class="success-rate ${rateClass}">${stats.successRate}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            if (sortedIPs.length === 0 || sortedIPs.every(([_, stats]) => stats.requests === 0)) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No requests yet</td></tr>';
+            }
+        }
+
+        // Auto-load stats on page load
+        window.addEventListener('load', () => {
+            console.log('Loading stats from:', proxyUrl);
+            
+            // Automatically load stats without login
+            setTimeout(() => {
+                loadStats();
+            }, 500);
+            
+            // Enable auto-refresh by default after first load
+            setTimeout(() => {
+                document.getElementById('autoRefresh').checked = true;
+                toggleAutoRefresh();
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

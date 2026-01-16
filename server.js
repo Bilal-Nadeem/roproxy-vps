@@ -238,6 +238,11 @@ app.use(express.raw({ type: '*/*', limit: '50gb' }));
 
 // Stats endpoint (no auth required)
 app.get('/__stats', (req, res) => {
+    // Enable CORS for dashboard access
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
     const uptime = process.uptime();
     const successRate = stats.totalRequests > 0 
         ? ((stats.totalRequests - stats.errors) / stats.totalRequests * 100).toFixed(2)
@@ -279,6 +284,11 @@ app.get('/__stats', (req, res) => {
 
 // Health endpoint (no auth required)
 app.get('/__health', (req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
     res.json({ status: 'ok', proxies: connectionPool.length });
 });
 
