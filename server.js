@@ -649,11 +649,16 @@ function isValidSession(token) {
 }
 
 // Dashboard password
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '@Lua98765';
+const DASHBOARD_PASSWORD = '@Lua98765';
 
 // Dashboard login endpoint (POST)
 app.post('/dashboard/login', express.urlencoded({ extended: true }), (req, res) => {
     const { password } = req.body;
+    
+    console.log('[Dashboard] Login attempt');
+    console.log('[Dashboard] Received password length:', password ? password.length : 0);
+    console.log('[Dashboard] Expected password length:', DASHBOARD_PASSWORD.length);
+    console.log('[Dashboard] Match:', password === DASHBOARD_PASSWORD);
     
     if (password === DASHBOARD_PASSWORD) {
         // Create session
