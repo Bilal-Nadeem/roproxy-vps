@@ -13,6 +13,9 @@ const MAX_RETRIES = 5;  // Number of retry attempts (increased for rate limits)
 const REQUEST_TIMEOUT = 20000;  // Timeout in milliseconds (20 seconds)
 const RATE_LIMIT_RETRY_DELAY = 100;  // Delay between 429 retries (ms)
 
+// Load proxy configuration
+const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
+
 // Statistics tracking
 let stats = {
     totalRequests: 0,
@@ -37,9 +40,6 @@ if (proxyConfig.enabled) {
         };
     });
 }
-
-// Load proxy configuration
-const proxyConfig = JSON.parse(fs.readFileSync('./proxies.json', 'utf8'));
 let connectionPool;
 let currentConnectionIndex = 0;
 
