@@ -401,7 +401,13 @@ Access the **real-time web dashboard** at:
 https://yoursite.com/dashboard
 ```
 
-**Default Password:** `admin123`
+**Default Password:** `@Lua98765`
+
+**Security Features:**
+- ✅ Session-based authentication (no password in URL)
+- ✅ Secure HTTP-only cookies
+- ✅ 24-hour session duration
+- ✅ Logout functionality
 
 **To change the password:**
 ```bash

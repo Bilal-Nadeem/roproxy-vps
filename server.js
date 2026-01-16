@@ -4,6 +4,7 @@ const express = require('express');
 const fetch = require('node-fetch');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 
@@ -369,6 +370,7 @@ function getDashboardHTML() {
                 <div class="status-dot"></div>
                 <span id="statusText">Online</span>
                 <button class="refresh-btn" onclick="loadStats()">↻ Refresh</button>
+                <button class="refresh-btn" onclick="logout()" style="background: #ff4444; color: white; margin-left: 8px;">Logout</button>
             </div>
         </div>
 
@@ -524,6 +526,10 @@ function getDashboardHTML() {
             }
         }
 
+        function logout() {
+            window.location.href = '/dashboard/logout';
+        }
+
         // Auto-refresh every 5 seconds
         loadStats();
         autoRefreshInterval = setInterval(loadStats, 5000);
@@ -624,14 +630,79 @@ app.get('/__health', (req, res) => {
     res.json({ status: 'ok', proxies: connectionPool.length });
 });
 
-// Dashboard endpoint (password protected)
+// Simple session storage (in-memory)
+const sessions = new Map();
+const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+function generateSessionToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+function isValidSession(token) {
+    const session = sessions.get(token);
+    if (!session) return false;
+    if (Date.now() > session.expiresAt) {
+        sessions.delete(token);
+        return false;
+    }
+    return true;
+}
+
+// Dashboard password
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '@Lua98765';
-app.get('/dashboard', (req, res) => {
-    const password = req.query.password;
+
+// Dashboard login endpoint (POST)
+app.post('/dashboard/login', express.urlencoded({ extended: true }), (req, res) => {
+    const { password } = req.body;
     
-    // Simple password check
-    if (password !== DASHBOARD_PASSWORD) {
-        return res.status(401).send(`
+    if (password === DASHBOARD_PASSWORD) {
+        // Create session
+        const token = generateSessionToken();
+        sessions.set(token, {
+            createdAt: Date.now(),
+            expiresAt: Date.now() + SESSION_DURATION
+        });
+        
+        // Set secure cookie
+        res.setHeader('Set-Cookie', `session=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_DURATION / 1000}; Path=/`);
+        res.redirect('/dashboard');
+    } else {
+        res.redirect('/dashboard?error=1');
+    }
+});
+
+// Dashboard logout endpoint
+app.get('/dashboard/logout', (req, res) => {
+    const cookies = req.headers.cookie?.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+    }, {});
+    
+    if (cookies?.session) {
+        sessions.delete(cookies.session);
+    }
+    
+    res.setHeader('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/');
+    res.redirect('/dashboard');
+});
+
+// Dashboard main endpoint
+app.get('/dashboard', (req, res) => {
+    // Check for existing session
+    const cookies = req.headers.cookie?.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+    }, {});
+    
+    const sessionToken = cookies?.session;
+    
+    // Validate session
+    if (!sessionToken || !isValidSession(sessionToken)) {
+        // Show login page
+        const hasError = req.query.error === '1';
+        return res.send(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -657,7 +728,8 @@ app.get('/dashboard', (req, res) => {
             width: 400px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
-        h1 { margin-bottom: 24px; font-size: 24px; }
+        h1 { margin-bottom: 8px; font-size: 24px; }
+        .subtitle { color: #888; margin-bottom: 24px; font-size: 14px; }
         input {
             width: 100%;
             padding: 12px;
@@ -682,25 +754,27 @@ app.get('/dashboard', (req, res) => {
             transition: all 0.2s;
         }
         button:hover { background: #e0e0e0; }
-        .error { color: #ff4444; margin-top: 12px; font-size: 14px; }
+        .error { 
+            color: #ff4444; 
+            margin-top: 12px; 
+            font-size: 14px;
+            padding: 8px;
+            background: #ff444420;
+            border: 1px solid #ff4444;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
     <div class="login-box">
         <h1>🔒 Dashboard Login</h1>
-        <form onsubmit="login(event)">
-            <input type="password" id="password" placeholder="Enter Password" autofocus>
+        <div class="subtitle">Secure access to RoProxy monitoring</div>
+        <form method="POST" action="/dashboard/login">
+            <input type="password" name="password" placeholder="Enter Password" autofocus required>
             <button type="submit">Access Dashboard</button>
-            ${password ? '<div class="error">Invalid password</div>' : ''}
+            ${hasError ? '<div class="error">⚠ Invalid password. Please try again.</div>' : ''}
         </form>
     </div>
-    <script>
-        function login(e) {
-            e.preventDefault();
-            const password = document.getElementById('password').value;
-            window.location.href = '/dashboard?password=' + encodeURIComponent(password);
-        }
-    </script>
 </body>
 </html>
         `);
