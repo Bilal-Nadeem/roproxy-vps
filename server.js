@@ -128,12 +128,12 @@ async function fetchWithRetry(url, options, requestPath) {
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].rateLimits++;
                     }
-                    console.log(`[RATE LIMIT] ${connType} - ${response.status} - Retrying... (${attempt}/${MAX_RETRIES})`);
+                    console.log(`[RATE LIMIT] ${connType} - 429 on ${requestPath} - Attempt ${attempt}/${MAX_RETRIES}`);
                 } else {
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].errors++;
                     }
-                    console.log(`[${connType}] Got ${response.status}, retrying with next proxy...`);
+                    console.log(`[${connType}] ${response.status} on ${requestPath}, retrying...`);
                 }
                 
                 lastResponse = response;
@@ -151,17 +151,17 @@ async function fetchWithRetry(url, options, requestPath) {
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].successes++;
                     }
-                    console.log(`[✓ RETRY SUCCESS] ${connType} - ${response.status} (${duration}ms)`);
+                    console.log(`[✓ SUCCESS] ${connType} - ${response.status} on ${requestPath} (attempt ${attempt}, ${duration}ms)`);
                 } else {
                     // Final attempt but still rate limited
                     stats.errors++;
                     if (stats.perIP[ipKey]) {
                         stats.perIP[ipKey].errors++;
                     }
-                    console.log(`[✗ FAILED] All retries exhausted - ${response.status} (${duration}ms)`);
+                    console.log(`[✗ FAILED] All retries exhausted - ${response.status} on ${requestPath} (${duration}ms)`);
                 }
             } else if (!shouldRetry && response.status === 200) {
-                // First attempt success - don't log (too verbose)
+                // First attempt success - only track in stats
                 if (stats.perIP[ipKey]) {
                     stats.perIP[ipKey].successes++;
                 }
@@ -178,7 +178,7 @@ async function fetchWithRetry(url, options, requestPath) {
                 stats.perIP[ipKey].errors++;
             }
             
-            console.log(`[✗ ${connType}] ${error.code || error.message.substring(0, 50)} - Retry ${attempt}/${MAX_RETRIES}`);
+            console.log(`[✗ ${connType}] ${error.code || error.message.substring(0, 50)} on ${requestPath} - Attempt ${attempt}/${MAX_RETRIES}`);
             
             // Small delay before retrying with next proxy
             if (attempt < MAX_RETRIES) {
@@ -570,9 +570,9 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 
-// Middleware
+// Middleware - ORDER MATTERS!
 app.use(express.json({ limit: '50gb' }));
-app.use(express.raw({ type: '*/*', limit: '50gb' }));
+app.use(express.urlencoded({ extended: true })); // For form data (dashboard login)
 
 // Stats endpoint (no auth required)
 app.get('/__stats', (req, res) => {
@@ -652,7 +652,7 @@ function isValidSession(token) {
 const DASHBOARD_PASSWORD = '@Lua98765';
 
 // Dashboard login endpoint (POST)
-app.post('/dashboard/login', express.urlencoded({ extended: true }), (req, res) => {
+app.post('/dashboard/login', (req, res) => {
     const { password } = req.body;
     
     console.log('[Dashboard] Login attempt');
@@ -807,7 +807,7 @@ app.use((req, res, next) => {
 });
 
 // Main proxy handler - Path mode only
-app.all('*', async (req, res) => {
+app.all('*', express.raw({ type: '*/*', limit: '50gb' }), async (req, res) => {
     // Path mode: yourdomain.com/catalog/v1/... -> catalog.roblox.com/v1/...
     const pathParts = req.path.split('/').filter(p => p);
     
